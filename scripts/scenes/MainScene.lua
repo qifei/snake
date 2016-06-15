@@ -19,8 +19,6 @@ for i=1,32 do
     end
 end
 
-local cells = {}
-local dots = {}
 local Grid = nil
 local mySnake = nil
 
@@ -28,23 +26,21 @@ local mySnake = nil
 Cell = {
 	x,
 	y,
+	m,
+	f,
 }
-function Cell:new(x, y, m, f)
-	--args = args or {x=0, y=0}
-	local this = {x=0, y=0, m=true, f=0}
-	this.x = x
-	this.y = y
-	this.cellSprite = display.newSprite("cell.png", x*18-8, y*18-8)
+
+function Cell:new(p)
+	local this = p or {x=0, y=0, m=true, f=0}
+	this.m = true
+	this.f = 0
+	this.cellSprite = display.newSprite("cell.png", this.x*18-8, this.y*18-8)
 	Grid:addChild(this.cellSprite)
 
 	self.__index = self
 	return setmetatable(this, self)
 end
 
-function Cell:disappear()
-	self.cellSprite:removeSelf()
-	self.cellSprite = nil
-end
 
 function Cell:move(dir)
 	local dx
@@ -84,8 +80,9 @@ function Cell:move(dir)
 	end
 
 	--print("matrix[self.x+dx][self.y+dy].f: "..matrix[self.x+dx][self.y+dy].f)
-
-	if matrix[self.x+dx][self.y+dy].f==0 then
+	if dx==nil or dy==nil then
+		self.m = false
+	elseif matrix[self.x+dx][self.y+dy].f~=nil then
 		self.m = false
 	end
 
@@ -128,7 +125,7 @@ end
 function Cell:eat(x, y)
 	if matrix[x][y].t=="food" then
 		matrix[x][y].dotSprite:removeSelf()
-		matrix[x][y] = nil
+		matrix[x][y] = {x, y}
 		self.f=1
 	end
 end
@@ -137,28 +134,27 @@ end
 Dot = {
 	x,
 	y,
+	t,
 }
 
-function Dot:new(x, y, t)
-    local this = {x=0, y=0, t="food"}
-	this.x = x
-	this.y = y
-	this.dotSprite = display.newSprite("dot.png", x*18-8, y*18-8)
+function Dot:new(p)
+	local this = p or {x=0, y=0, t="food"}
+	this.t = "food"
+	this.dotSprite = display.newSprite("dot.png", this.x*18-8, this.y*18-8)
 	Grid:addChild(this.dotSprite)
 
 	self.__index = self
 	return setmetatable(this, self)
 end
 
+
 --蛇的构造
 Snake = {
 	body,
-	dir
+	dir,
 }
-function Snake:new(body, dir)
-	local this = {}
-	this.body = body or {Cell:new(1, 1)}
-	this.dir = dir or "stay"
+function Snake:new(p)
+	local this = p or {body={Cell:new{x=1, y=1},}, dir="stay"}
 	for i=1,#this.body do
 		matrix[this.body[i].x][this.body[i].y] = this.body[i]
 	end
@@ -172,8 +168,11 @@ function Snake:move(newDir)
 			--todo
 		else
 			self.body[1]:move(self.dir)
-			for i=2,#self.body do
-				self.body[i]:moveTo(self.body[i-1].x, self.body[i-1].y)
+			if self.body[1].m==true then
+				for i=2,#self.body do
+					self.body[i]:moveTo(self.body[i-1].x, self.body[i-1].y)
+					--matrix[self.body[i-1].x][self.body[i-1].y]=self.body[i]
+				end
 			end
 		end
 	else
@@ -194,16 +193,19 @@ function Snake:move(newDir)
 		else
 			self.dir=newDir
 			self.body[1]:move(self.dir)
-			for i=2,#self.body do
-				self.body[i]:moveTo(self.body[i-1].x, self.body[i-1].y)
-				matrix[self.body[i-1].x][self.body[i-1].y]=self.body[i]
+			if self.body[1].m==true then
+				for i=2,#self.body do
+					self.body[i]:moveTo(self.body[i-1].x, self.body[i-1].y)
+					--matrix[self.body[i-1].x][self.body[i-1].y]=self.body[i]
+				end
 			end
 		end
 	end
 
 
 	if self.body[1].f==1 then
-		table.insert(self.body, Cell:new(self.body[#self.body].x, self.body[#self.body].y))
+		c = Cell:new{x=self.body[#self.body].x, y=self.body[#self.body].y}
+		table.insert(self.body, c)
 		self.body[1].f = self.body[1].f - 1
 	end
 
@@ -242,17 +244,15 @@ function MainScene:ctor()
 		:align(display.CENTER, display.cx, display.top - 40)
 		:addTo(self)
 
-	--MainScene:initGame()
+	local dot1 = Dot:new{x=3, y=12}
+	matrix[3][12] = dot1
 
-	matrix[3][12] = Dot:new(3, 12)
-
-	--mySnake = Snake:new({Cell:new(3, 13), Cell:new(3, 12), Cell:new(3, 11), Cell:new(3, 10), Cell:new(3, 9), Cell:new(3, 8), Cell:new(3, 7), Cell:new(3, 6), Cell:new(3, 5), Cell:new(3, 4), Cell:new(3, 3), Cell:new(3, 2)}, "up")
-	mySnake = Snake:new({Cell:new(3, 5), Cell:new(3, 4), Cell:new(3, 3), Cell:new(3, 2)}, "up")
-
+	mySnake = Snake:new{body={Cell:new{x=3, y=5}, Cell:new{x=3, y=4}, Cell:new{x=3, y=3}, Cell:new{x=3, y=2}}, dir="up"}
+	dump(mySnake)
 
 	local arrowUp = self:createButtons(display.cx, display.bottom+220, "arrow_up"):onButtonClicked(function(event)
-		--mySnake:move("up")
-		mySnake.dir = "up"
+		mySnake:move("up")
+		--mySnake.dir = "up"
 	end)
 
 	local arrowDown = self:createButtons(display.cx, display.bottom+60, "arrow_down"):onButtonClicked(function (event)
@@ -270,14 +270,8 @@ function MainScene:ctor()
 		mySnake.dir = "right"
 	end)
 
-	local btnPause = self:createButtons(display.cx, display.bottom+140, "btn_pause"):onButtonClicked(function (event)
-		--self:unscheduleUpdate()
-		--self:unscheduleGlobal()
-		-- if matrix[3][2].f then
-		-- 	print("matrix[3][2].f: "..matrix[3][2].f)
-		-- end
-		
-		dump(matrix[3])
+	local btnPause = self:createButtons(display.cx, display.bottom+140, "btn_pause"):onButtonClicked(function (event)		
+		mySnake:move("stop")
 	end) 
 
 	local btnUp = cc.ui.UIPushButton.new({normal="btn_stop_normal.png", pressed="btn_stop_pressed.png"})
@@ -290,17 +284,16 @@ function MainScene:ctor()
 
 	scheduler.scheduleGlobal(function()
             mySnake:move()
-    end, 0.2)
+    end, 0.4)
 end
 
--- function MainScene:initGame()
--- 	for i=1,32 do
--- 		for j=1,32 do
--- 			matrix[i][j] = Cell:new(i, j)
--- 		end
--- 	end
--- end
-
+function MainScene:initGame()
+	for i=1,32 do
+		for j=1,32 do
+			matrix[i][j] = Cell:new{x=i, y=j}
+		end
+	end
+end
 
 function MainScene:onEnter()
 
@@ -334,7 +327,7 @@ function dropFood()
 	local dot = pool[random(#pool)]
 	local x = dot[1]
 	local y = dot[2]
-	matrix[x][y] = Dot:new(x, y)
+	matrix[x][y] = Dot:new{x=x, y=y}
 	
 end
 
